@@ -4,6 +4,7 @@ const jimp = require("jimp");
 const Category = require("../models/category");
 const User = require("../models/user");
 const Ad = require("../models/ad");
+const State = require("../models/state");
 
 const addImage = async (buffer) => {
     const newName = `${uuidv4()}.jpg`;
@@ -20,9 +21,9 @@ const isValidMimetype = (mimetype) => {
     return false;
 };
 
-const pushImg = async (img, ad) => {
+const pushImg = async (img, ad, isDefault = false) => {
     let url = await addImage(img.data);
-    ad.images.push({ url, default: true });
+    ad.images.push({ url, default: isDefault });
 
     return;
 };
@@ -68,15 +69,61 @@ module.exports = {
             if (isValidMimetype(req.files.img.mimetype))
                 await pushImg(req.files.img, newAd);
         } else {
-            for (let img of req.files.img)
-                if (isValidMimetype(img.mimetype)) await pushImg(img, newAd);
+            for (let i in req.files.img)
+                if (isValidMimetype(req.files.img[i].mimetype))
+                    await pushImg(req.files.img[i], newAd, i === 0);
         }
 
         const info = await newAd.save();
         res.json({ id: info._id });
     },
 
-    getList: async (req, res) => {},
+    getList: async (req, res) => {
+        let total = 0;
+        let { sort = "asc", offset = 0, limit = 8, q, cat, state } = req.query;
+
+        let filters = { status: true };
+
+        if (q) filters.title = new RegExp(q, "i");
+        if (cat) {
+            const category = await Category.findOne({ slug: cat }).exec();
+            if (category) filters.category = category._id.toString();
+        }
+        if (state) {
+            const s = await State.findOne({
+                name: state.toUpperCase(),
+            }).exec();
+            if (s) filters.state = s._id.toString();
+        }
+
+        const adsTotal = await Ad.find(filters).exec();
+        total = adsTotal.length;
+        const adsData = await Ad.find(filters)
+            .sort({ dateCreated: sort == "desc" ? -1 : 1 })
+            .skip(parseInt(offset))
+            .limit(parseInt(limit))
+            .exec();
+
+        let ads = [];
+        for (let ad of adsData) {
+            let image;
+            let defaultImg = ad.images.find((img) => img.default);
+
+            if (defaultImg)
+                image = `${process.env.BASE}/media/${defaultImg.url}`;
+            else image = `${process.env.BASE}/media/default.jpg`;
+
+            ads.push({
+                id: ad._id,
+                title: ad.title,
+                price: ad.price,
+                priceNegotiable: ad.priceNegotiable,
+                image,
+            });
+        }
+
+        res.json({ ads, total });
+    },
 
     getItem: async (req, res) => {},
 
