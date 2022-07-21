@@ -28,6 +28,8 @@ const pushImg = async (img, ad, isDefault = false) => {
     return;
 };
 
+const idRegex = /^[0-9a-fA-F]{24}$/;
+
 module.exports = {
     getStates: async (req, res) => {},
 
@@ -36,6 +38,17 @@ module.exports = {
 
         if (!title || !cat) {
             res.json({ error: "Título ou categoria não informados" });
+            return;
+        }
+
+        if (!cat.match(idRegex)) {
+            res.json({ error: "Categoria inválida" });
+            return;
+        }
+
+        const category = await Category.findById(cat);
+        if (!category) {
+            res.json({ error: "Categoria inválida" });
             return;
         }
 
@@ -125,7 +138,82 @@ module.exports = {
         res.json({ ads, total });
     },
 
-    getItem: async (req, res) => {},
+    getItem: async (req, res) => {
+        const { id, other = null } = req.query;
+
+        if (!id) {
+            res.json({ error: "Produto não informado" });
+            return;
+        }
+
+        if (!id.match(idRegex)) {
+            res.json({ error: "ID Inválido" });
+            return;
+        }
+
+        const ad = await Ad.findById(id).exec();
+        if (!ad) {
+            res.json({ error: "Produto não existe" });
+            return;
+        }
+
+        ad.views++;
+        await ad.save();
+
+        let images = [];
+        for (let img of ad.images) {
+            images.push(`${process.env.BASE}/media/${img.url}`);
+        }
+
+        let category = await Category.findById(ad.category).exec();
+        let userInfo = await User.findById(ad.idUser).exec();
+        let state = await State.findById(ad.state).exec();
+
+        let others = [];
+        if (other) {
+            const otherData = await Ad.find({
+                status: true,
+                idUser: ad.idUser,
+            }).exec();
+
+            for (let data of otherData) {
+                if (data._id.toString() !== ad._id.toString()) {
+                    let image;
+                    let defaultImg = data.images.find((img) => img.default);
+
+                    if (defaultImg)
+                        image = `${process.env.BASE}/media/${defaultImg.url}`;
+                    else image = `${process.env.BASE}/media/default.jpg`;
+
+                    others.push({
+                        id: data._id,
+                        title: data.title,
+                        price: data.price,
+                        priceNegotiable: data.priceNegotiable,
+                        image,
+                    });
+                }
+            }
+        }
+
+        res.json({
+            id: ad._id,
+            title: ad.title,
+            price: ad.price,
+            priceNegotiable: ad.priceNegotiable,
+            description: ad.description,
+            dateCreated: ad.dateCreated,
+            views: ad.views,
+            images,
+            category,
+            userInfo: {
+                name: userInfo.name,
+                email: userInfo.email,
+            },
+            stateName: state.name,
+            others,
+        });
+    },
 
     getCategories: async (req, res) => {
         const unprocessed = await Category.find();
@@ -134,7 +222,7 @@ module.exports = {
 
         for (let category of unprocessed) {
             categories.push({
-                ...category.doc,
+                ...category._doc,
                 img: `${process.env.BASE}/assets/images/${category.slug}.png`,
             });
         }
@@ -142,5 +230,65 @@ module.exports = {
         res.json({ categories });
     },
 
-    editAction: async (req, res) => {},
+    editAction: async (req, res) => {
+        let { id } = req.params;
+        let { title, status, price, priceneg, desc, cat, token } = req.body;
+
+        let { images, newImages } = req.files || {};
+
+        if (!id.match(idRegex)) {
+            res.json({ error: "ID Inválido" });
+            return;
+        }
+
+        const ad = await Ad.findById(id).exec();
+        if (!ad) {
+            res.json({ error: "Anúncio não encontrado" });
+            return;
+        }
+
+        const user = await User.findOne({ token }).exec();
+        if (user && user._id.toString() !== ad.idUser) {
+            res.json({
+                error: "Você não tem permissão para editar este anúncio",
+            });
+            return;
+        }
+
+        let updates = {};
+
+        if (title) updates.title = title;
+        if (status) updates.status = status;
+        if (price) {
+            price = price.replace(".", "").replace(",", ".").replace("R$ ", "");
+            price = parseFloat(price);
+            updates.price = price;
+        }
+        if (priceneg) updates.priceNegotiable = priceneg;
+        if (desc) updates.description = desc;
+        if (cat) {
+            const category = await Category.findOne({ slug: cat }).exec();
+
+            if (category) updates.category = category._id.toString();
+        }
+
+        let imgUpdate = [];
+
+        if (images) {
+            for (let img of images)
+                if (isValidMimetype(img.mimetype)) imgUpdate.push(img);
+        }
+
+        if (newImages) {
+            for (let img of newImages)
+                if (isValidMimetype(img.mimetype)) imgUpdate.push(img);
+        }
+
+        console.log(imgUpdate, images, newImages);
+        if (imgUpdate.length) updates.images = imgUpdate;
+
+        await Ad.findByIdAndUpdate(id, { $set: updates }).exec();
+
+        res.json({ success: true });
+    },
 };
