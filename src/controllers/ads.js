@@ -80,7 +80,7 @@ module.exports = {
 
         if (req.files.img.length == undefined) {
             if (isValidMimetype(req.files.img.mimetype))
-                await pushImg(req.files.img, newAd);
+                await pushImg(req.files.img, newAd, true);
         } else {
             for (let i in req.files.img)
                 if (isValidMimetype(req.files.img[i].mimetype))
@@ -234,7 +234,7 @@ module.exports = {
         let { id } = req.params;
         let { title, status, price, priceneg, desc, cat, token } = req.body;
 
-        let { images, newImages } = req.files || {};
+        let { img, newImages } = req.files || {};
 
         if (!id.match(idRegex)) {
             res.json({ error: "ID Inválido" });
@@ -272,22 +272,40 @@ module.exports = {
             if (category) updates.category = category._id.toString();
         }
 
-        let imgUpdate = [];
+        if (req.files && req.files.img) {
+            const adI = await Ad.findById(id);
 
-        if (images) {
-            for (let img of images)
-                if (isValidMimetype(img.mimetype)) imgUpdate.push(img);
+            if (req.files.img.length == undefined) {
+                if (
+                    ["image/jpeg", "image/jpg", "image/png"].includes(
+                        req.files.img.mimetype
+                    )
+                ) {
+                    let url = await addImage(req.files.img.data);
+                    adI.images.push({
+                        url,
+                        default: false,
+                    });
+                }
+            } else {
+                for (let i = 0; i < req.files.img.length; i++) {
+                    if (
+                        ["image/jpeg", "image/jpg", "image/png"].includes(
+                            req.files.img[i].mimetype
+                        )
+                    ) {
+                        let url = await addImage(req.files.img[i].data);
+                        adI.images.push({
+                            url,
+                            default: false,
+                        });
+                    }
+                }
+            }
+
+            adI.images = [...adI.images];
+            await adI.save();
         }
-
-        if (newImages) {
-            for (let img of newImages)
-                if (isValidMimetype(img.mimetype)) imgUpdate.push(img);
-        }
-
-        console.log(imgUpdate, images, newImages);
-        if (imgUpdate.length) updates.images = imgUpdate;
-
-        await Ad.findByIdAndUpdate(id, { $set: updates }).exec();
 
         res.json({ success: true });
     },
