@@ -37,7 +37,7 @@ module.exports = {
                 },
             });
         }
-        console.log(adList);
+
         res.json({
             name: user.name,
             email: user.email,

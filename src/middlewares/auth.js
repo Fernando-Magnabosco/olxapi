@@ -19,14 +19,13 @@ module.exports = {
             return;
         }
 
-        const user = await User.findOne({ token });
+        const user = await User.findOne({ where: { token: token } });
 
         if (!user) {
             res.json({ notallowed: true });
             return;
         }
 
-        
         next();
     },
 };

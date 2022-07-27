@@ -110,8 +110,6 @@ module.exports = {
             if (s) filters.state = s._id.toString();
         }
 
-        
-
         let adsData;
 
         adsData = await Ad.findAll({
@@ -131,6 +129,14 @@ module.exports = {
                     default: true,
                 },
             });
+
+            if (!defaultImg) {
+                defaultImg = await Image.findOne({
+                    where: {
+                        ad: ad._id,
+                    },
+                });
+            }
 
             if (defaultImg)
                 image = `${process.env.BASE}/media/${defaultImg.url}`;
@@ -204,6 +210,14 @@ module.exports = {
                             default: true,
                         },
                     });
+
+                    if (!defaultImg) {
+                        defaultImg = await Image.findOne({
+                            where: {
+                                ad: data._id,
+                            },
+                        });
+                    }
 
                     if (defaultImg)
                         image = `${process.env.BASE}/media/${defaultImg.url}`;
