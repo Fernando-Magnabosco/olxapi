@@ -2,7 +2,7 @@
   "name": "olxapi",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "startdev": "nodemon server.js"
@@ -20,6 +20,10 @@
     "jimp": "^0.16.1",
     "mongoose": "^6.4.4",
     "nodemon": "^2.0.19",
+    "pg": "^8.7.3",
+    "pg-hstore": "^2.3.4",
+    "postgres": "^3.2.4",
+    "sequelize": "^6.21.3",
     "uuid": "^8.3.2"
   }
 }

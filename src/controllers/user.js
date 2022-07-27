@@ -3,29 +3,41 @@ const State = require("../models/state");
 const User = require("../models/user");
 const Category = require("../models/category");
 const Ad = require("../models/ad");
-const { default: mongoose } = require("mongoose");
+const Image = require("../models/image");
+
 const { default: bcrypt } = require("bcrypt");
 
 module.exports = {
     getStates: async (req, res) => {
-        let states = await State.find();
+        let states = await State.findAll();
         res.json({ states });
     },
 
     info: async (req, res) => {
         let token = req.query.token;
 
-        const user = await User.findOne({ token });
-        const state = await State.findById(user.state);
-        const ads = await Ad.find({ idUser: user._id.toString() });
+        const user = await User.findOne({ where: { token: token } });
+        const state = await State.findByPk(user.state);
+        const ads = await Ad.findAll({
+            where: { idUser: user._id.toString() },
+        });
 
         var adList = [];
 
         for (let ad of ads) {
-            const category = await Category.findById(ad.category);
-            adList.push({ ...ad, category: category.slug });
+            const images = await Image.findAll({
+                where: { ad: ad._id.toString() },
+            });
+            const category = await Category.findByPk(ad.category);
+            adList.push({
+                _doc: {
+                    ...ad.dataValues,
+                    images: images,
+                    category: category.slug,
+                },
+            });
         }
-
+        console.log(adList);
         res.json({
             name: user.name,
             email: user.email,
@@ -48,7 +60,9 @@ module.exports = {
         if (data.name) updates.name = data.name;
 
         if (data.email) {
-            const emailCheck = await User.findOne({ email: data.email });
+            const emailCheck = await User.findOne({
+                where: { email: data.email },
+            });
             if (emailCheck) {
                 res.json({ error: { email: { msg: "Email já cadastrado" } } });
                 return;
@@ -74,7 +88,7 @@ module.exports = {
             updates.passwordHash = await bcrypt.hash(data.password, 10);
         }
 
-        await User.findOneAndUpdate({ token: data.token }, { $set: updates });
+        // await User.findOneAndUpdate({ token: data.token }, { $set: updates });
 
         res.json({});
     },

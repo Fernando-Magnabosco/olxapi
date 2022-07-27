@@ -5,6 +5,7 @@ const Category = require("../models/category");
 const User = require("../models/user");
 const Ad = require("../models/ad");
 const State = require("../models/state");
+const Image = require("../models/image");
 
 const addImage = async (buffer) => {
     const newName = `${uuidv4()}.jpg`;
@@ -28,7 +29,7 @@ const pushImg = async (img, ad, isDefault = false) => {
     return;
 };
 
-const idRegex = /^[0-9a-fA-F]{24}$/;
+const idRegex = /[0-9]+/;
 
 module.exports = {
     getStates: async (req, res) => {},
@@ -46,7 +47,7 @@ module.exports = {
             return;
         }
 
-        const category = await Category.findById(cat);
+        const category = await Category.findByPk(cat);
         if (!category) {
             res.json({ error: "Categoria inválida" });
             return;
@@ -57,7 +58,7 @@ module.exports = {
             price = parseFloat(price);
         } else price = 0;
 
-        const user = await User.findOne({ token }).exec();
+        const user = await User.findOne({ where: { token: token } });
 
         const newAd = new Ad({
             status: true,
@@ -87,7 +88,7 @@ module.exports = {
                     await pushImg(req.files.img[i], newAd, i === 0);
         }
 
-        const info = await newAd.save();
+        const info = await Ad.create(newAd);
         res.json({ id: info._id });
     },
 
@@ -95,11 +96,11 @@ module.exports = {
         let total = 0;
         let { sort = "asc", offset = 0, limit = 8, q, cat, state } = req.query;
 
-        let filters = { status: true };
+        let filters = { status: "true" };
 
         if (q) filters.title = new RegExp(q, "i");
         if (cat) {
-            const category = await Category.findOne({ slug: cat }).exec();
+            const category = await Category.findOne({ where: { slug: cat } });
             if (category) filters.category = category._id.toString();
         }
         if (state) {
@@ -109,18 +110,27 @@ module.exports = {
             if (s) filters.state = s._id.toString();
         }
 
-        const adsTotal = await Ad.find(filters).exec();
-        total = adsTotal.length;
-        const adsData = await Ad.find(filters)
-            .sort({ dateCreated: sort == "desc" ? -1 : 1 })
-            .skip(parseInt(offset))
-            .limit(parseInt(limit))
-            .exec();
+        
+
+        let adsData;
+
+        adsData = await Ad.findAll({
+            where: filters,
+            limit: parseInt(limit),
+            offset: parseInt(offset),
+            order: [["dateCreated", sort]],
+        });
+        total = adsData.length;
 
         let ads = [];
         for (let ad of adsData) {
             let image;
-            let defaultImg = ad.images.find((img) => img.default);
+            let defaultImg = await Image.findOne({
+                where: {
+                    ad: ad._id,
+                    default: true,
+                },
+            });
 
             if (defaultImg)
                 image = `${process.env.BASE}/media/${defaultImg.url}`;
@@ -151,7 +161,8 @@ module.exports = {
             return;
         }
 
-        const ad = await Ad.findById(id).exec();
+        const ad = await Ad.findByPk(id);
+
         if (!ad) {
             res.json({ error: "Produto não existe" });
             return;
@@ -161,25 +172,38 @@ module.exports = {
         await ad.save();
 
         let images = [];
-        for (let img of ad.images) {
+        let queriedImages = await Image.findAll({
+            where: {
+                ad: ad._id,
+            },
+        });
+
+        for (let img of queriedImages) {
             images.push(`${process.env.BASE}/media/${img.url}`);
         }
 
-        let category = await Category.findById(ad.category).exec();
-        let userInfo = await User.findById(ad.idUser).exec();
-        let state = await State.findById(ad.state).exec();
+        let category = await Category.findByPk(ad.category);
+        let userInfo = await User.findByPk(ad.idUser);
+        let state = await State.findByPk(ad.state);
 
         let others = [];
         if (other) {
-            const otherData = await Ad.find({
-                status: true,
-                idUser: ad.idUser,
-            }).exec();
+            const otherData = await Ad.findAll({
+                where: {
+                    status: "true",
+                    idUser: ad.idUser,
+                },
+            });
 
             for (let data of otherData) {
                 if (data._id.toString() !== ad._id.toString()) {
                     let image;
-                    let defaultImg = data.images.find((img) => img.default);
+                    let defaultImg = await Image.findOne({
+                        where: {
+                            ad: data._id,
+                            default: true,
+                        },
+                    });
 
                     if (defaultImg)
                         image = `${process.env.BASE}/media/${defaultImg.url}`;
@@ -216,13 +240,12 @@ module.exports = {
     },
 
     getCategories: async (req, res) => {
-        const unprocessed = await Category.find();
-
+        const unprocessed = await Category.findAll();
         let categories = [];
 
         for (let category of unprocessed) {
             categories.push({
-                ...category._doc,
+                ...category.dataValues,
                 img: `${process.env.BASE}/assets/images/${category.slug}.png`,
             });
         }
@@ -234,20 +257,18 @@ module.exports = {
         let { id } = req.params;
         let { title, status, price, priceneg, desc, cat, token } = req.body;
 
-        let { img, newImages } = req.files || {};
-
         if (!id.match(idRegex)) {
             res.json({ error: "ID Inválido" });
             return;
         }
 
-        const ad = await Ad.findById(id).exec();
+        const ad = await Ad.findByPk(id);
         if (!ad) {
             res.json({ error: "Anúncio não encontrado" });
             return;
         }
 
-        const user = await User.findOne({ token }).exec();
+        const user = await User.findOne({ where: { token: token } });
         if (user && user._id.toString() !== ad.idUser) {
             res.json({
                 error: "Você não tem permissão para editar este anúncio",
@@ -267,13 +288,13 @@ module.exports = {
         if (priceneg) updates.priceNegotiable = priceneg;
         if (desc) updates.description = desc;
         if (cat) {
-            const category = await Category.findOne({ slug: cat }).exec();
+            const category = await Category.findOne({ where: { slug: cat } });
 
             if (category) updates.category = category._id.toString();
         }
 
         if (req.files && req.files.img) {
-            const adI = await Ad.findById(id);
+            // const adI = await Ad.findByPk(id);
 
             if (req.files.img.length == undefined) {
                 if (
@@ -282,8 +303,10 @@ module.exports = {
                     )
                 ) {
                     let url = await addImage(req.files.img.data);
-                    adI.images.push({
+
+                    Image.create({
                         url,
+                        ad: ad._id,
                         default: false,
                     });
                 }
@@ -295,18 +318,18 @@ module.exports = {
                         )
                     ) {
                         let url = await addImage(req.files.img[i].data);
-                        adI.images.push({
+
+                        Image.create({
                             url,
+                            ad: ad._id,
                             default: false,
                         });
                     }
                 }
             }
-
-            adI.images = [...adI.images];
-            await adI.save();
         }
 
+        await ad.update(updates);
         res.json({ success: true });
     },
 };

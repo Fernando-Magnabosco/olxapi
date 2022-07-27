@@ -1,16 +1,48 @@
-const mongoose = require("mongoose");
-mongoose.Promise = global.Promise;
+const { Sequelize, DataTypes } = require("sequelize");
+const db = require("../db");
 
-const modelSchema = new mongoose.Schema({
-    name: String,
-    email: String,
-    state: String,
-    passwordHash: String,
-    token: String,
-});
+const modelSchema = db.define(
+    "User",
+    {
+        _id: {
+            type: DataTypes.BIGINT,
+            primaryKey: true,
+            autoIncrement: true,
+        },
 
-const modelName = "User";
+        name: {
+            type: DataTypes.STRING,
+            allowNull: false,
+        },
 
-if (mongoose.connection && mongoose.connection.models[modelName])
-    module.exports = mongoose.connection.models[modelName];
-else module.exports = mongoose.model(modelName, modelSchema);
+        email: {
+            type: DataTypes.STRING,
+            allowNull: false,
+        },
+
+        state: {
+            type: DataTypes.BIGINT,
+            allowNull: false,
+            references: {
+                model: "State",
+                key: "_id",
+            },
+        },
+
+        passwordHash: {
+            type: DataTypes.STRING,
+            allowNull: false,
+        },
+
+        token: {
+            type: DataTypes.STRING,
+            allowNull: false,
+        },
+    },
+    {
+        timestamps: false,
+        freezeTableName: true,
+    }
+);
+
+module.exports = modelSchema;

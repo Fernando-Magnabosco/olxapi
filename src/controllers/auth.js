@@ -4,6 +4,8 @@ const { validationResult, matchedData } = require("express-validator");
 const User = require("../models/user");
 const State = require("../models/state");
 
+const idRegex = /[0-9]+/;
+
 module.exports = {
     signin: async (req, res) => {
         const errors = validationResult(req);
@@ -14,7 +16,7 @@ module.exports = {
         }
         const data = matchedData(req);
 
-        const user = await User.findOne({ email: data.email });
+        const user = await User.findOne({ where: { email: data.email } });
 
         if (!user) {
             res.json({ error: "Email e/ou senha inválidos" });
@@ -50,16 +52,18 @@ module.exports = {
         const data = matchedData(req);
 
         const user = await User.findOne({
-            email: data.email,
+            where: {
+                email: data.email,
+            },
         });
 
         if (user) {
-            res.json({ error: { email: { msg: "Email já cadastrado" } } });
+            res.json({ error: "Email já cadastrado" });
             return;
         }
 
-        if (mongoose.Types.ObjectId.isValid(data.state)) {
-            const stateItem = await State.findById(data.state);
+        if (data.state.match(idRegex)) {
+            const stateItem = await State.findByPk(data.state);
 
             if (!stateItem) {
                 res.json({ error: { state: { msg: "Estado não existe" } } });

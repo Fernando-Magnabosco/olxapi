@@ -1,22 +1,78 @@
-const mongoose = require("mongoose");
-mongoose.Promise = global.Promise;
+const { model } = require("mongoose");
+const { Sequelize, DataTypes } = require("sequelize");
+const db = require("../db");
 
-const modelSchema = new mongoose.Schema({
-    idUser: String,
-    state: String,
-    category: String,
-    images: [Object],
-    dateCreated: Date,
-    title: String,
-    price: Number,
-    priceNegotiable: Boolean,
-    description: String,
-    views: Number,
-    status: String,
-});
+const modelSchema = db.define(
+    "Ad",
+    {
+        _id: {
+            type: DataTypes.BIGINT,
+            primaryKey: true,
+            autoIncrement: true,
+        },
 
-const modelName = "Ad";
+        idUser: {
+            type: DataTypes.STRING,
+            allowNull: false,
+        },
 
-if (mongoose.connection && mongoose.connection.models[modelName])
-    module.exports = mongoose.connection.models[modelName];
-else module.exports = mongoose.model(modelName, modelSchema);
+        state: {
+            type: DataTypes.STRING,
+            allowNull: false,
+            references: {
+                model: "State",
+                key: "_id",
+            },
+        },
+
+        category: {
+            type: DataTypes.STRING,
+            allowNull: false,
+            references: {
+                model: "Category",
+                key: "_id",
+            },
+        },
+
+        dateCreated: {
+            type: DataTypes.DATE,
+            allowNull: false,
+        },
+
+        title: {
+            type: DataTypes.STRING,
+            allowNull: false,
+        },
+
+        price: {
+            type: DataTypes.FLOAT,
+            allowNull: false,
+        },
+
+        priceNegotiable: {
+            type: DataTypes.BOOLEAN,
+            allowNull: false,
+        },
+        description: {
+            type: DataTypes.STRING,
+            allowNull: false,
+        },
+
+        views: {
+            type: DataTypes.INTEGER,
+            allowNull: false,
+        },
+
+        status: {
+            type: DataTypes.STRING,
+            allowNull: false,
+        },
+    },
+
+    {
+        timestamps: false,
+        freezeTableName: true,
+    }
+);
+
+module.exports = modelSchema;
