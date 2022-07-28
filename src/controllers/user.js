@@ -7,6 +7,8 @@ const Image = require("../models/image");
 
 const { default: bcrypt } = require("bcrypt");
 
+const idRegex = /[0-9]+/;
+
 module.exports = {
     getStates: async (req, res) => {
         let states = await State.findAll();
@@ -71,12 +73,12 @@ module.exports = {
         }
 
         if (data.state) {
-            if (!mongoose.Types.ObjectId.isValid(data.state)) {
+            if (data.state.match(idRegex)) {
                 res.json({ error: { state: { msg: "Estado inválido" } } });
                 return;
             }
 
-            const stateExists = await State.findById(data.state);
+            const stateExists = await State.findByPk(data.state);
             if (!stateExists) {
                 res.json({ error: { state: { msg: "Estado não existe" } } });
                 return;
@@ -88,7 +90,8 @@ module.exports = {
             updates.passwordHash = await bcrypt.hash(data.password, 10);
         }
 
-        // await User.findOneAndUpdate({ token: data.token }, { $set: updates });
+        const user = await User.findOne({ where: { token: data.token } });
+        await user.update(updates);
 
         res.json({});
     },
